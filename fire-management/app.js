@@ -27,29 +27,28 @@ class FireManagementSystem {
   }
 
   initializeEventListeners() {
-    document
-      .getElementById("addFireBtn")
-      .addEventListener("click", () => this.addNewFire());
-    document
-      .getElementById("searchBtn")
-      .addEventListener("click", () => this.searchFiresByTime());
-    document
-      .getElementById("resetSearchBtn")
-      .addEventListener("click", () => this.resetSearch());
+    // Defensive: some elements (like the add form) may be removed from index.html
+    const addBtn = document.getElementById("addFireBtn");
+    if (addBtn) addBtn.addEventListener("click", () => this.addNewFire());
 
-    // 🔧 Gọi applyFilters() mỗi khi chọn huyện hoặc mức độ
-    document
-      .getElementById("filterDistrict")
-      .addEventListener("change", () => this.applyFilters());
-    document
-      .getElementById("filterDangerLevel")
-      .addEventListener("change", () => this.applyFilters());
+    const searchBtn = document.getElementById("searchBtn");
+    if (searchBtn) searchBtn.addEventListener("click", () => this.searchFiresByTime());
 
-    document.getElementById("discoveryTime").value = this.getCurrentDateTime();
+    const resetSearchBtn = document.getElementById("resetSearchBtn");
+    if (resetSearchBtn) resetSearchBtn.addEventListener("click", () => this.resetSearch());
 
-    document
-      .getElementById("newsUrl")
-      .addEventListener("change", (e) => this.validateUrl(e.target));
+    // Call applyFilters() when filter inputs exist
+    const filterDistrict = document.getElementById("filterDistrict");
+    if (filterDistrict) filterDistrict.addEventListener("change", () => this.applyFilters());
+
+    const filterDangerLevel = document.getElementById("filterDangerLevel");
+    if (filterDangerLevel) filterDangerLevel.addEventListener("change", () => this.applyFilters());
+
+    const discoveryInput = document.getElementById("discoveryTime");
+    if (discoveryInput) discoveryInput.value = this.getCurrentDateTime();
+
+    const newsInput = document.getElementById("newsUrl");
+    if (newsInput) newsInput.addEventListener("change", (e) => this.validateUrl(e.target));
   }
 
   validateUrl(input) {
