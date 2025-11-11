@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Admin - Quản lý Cháy rừng</title>
+
+    <!-- Leaflet CSS (optional) -->
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    />
+
+    <!-- Font Awesome -->
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    />
+
+    <style>
+      /* Reuse main app styles (simplified for admin) */
+      body { font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif; background:#f5f5f5; color:#333; padding:20px; }
+      .container { max-width:1100px; margin:0 auto; background:white; padding:20px; border-radius:8px; box-shadow:0 2px 10px rgba(0,0,0,0.05); }
+      h1 { margin-bottom:10px; }
+      .topbar { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:20px; }
+      .grid { display:grid; grid-template-columns: 1fr 420px; gap:20px; }
+      .panel { background: #fff; padding:15px; border-radius:6px; border:1px solid #eee; }
+      table { width:100%; border-collapse:collapse; }
+      th, td { text-align:left; padding:8px; border-bottom:1px solid #f0f0f0; font-size:0.95rem; }
+      th { background:#fafafa; }
+      .small { font-size:0.85rem; color:#666; }
+      button { cursor:pointer; }
+      .btn-danger { background:#e74c3c; color:#fff; border:none; padding:6px 8px; border-radius:4px; }
+      .btn-primary { background:#3498db; color:#fff; border:none; padding:8px 10px; border-radius:4px; }
+      .form-group { margin-bottom:12px; }
+      .form-group label { display:block; margin-bottom:6px; font-weight:600; }
+      .form-group input, .form-group select, .form-group textarea { width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="topbar">
+        <h1>Admin - Danh sách vụ cháy</h1>
+        <div>
+          <a href="index.html" class="btn-primary" style="text-decoration:none;padding:8px 10px;border-radius:4px;color:#fff;">Quay về trang chính</a>
+        </div>
+      </div>
+
+      <div class="grid">
+        <div class="panel">
+          <h3>Danh sách tất cả vụ cháy</h3>
+          <p class="small">Dữ liệu lấy từ <code>api/fires.php</code></p>
+          <div style="overflow:auto; max-height:600px;">
+            <table id="firesTable">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Tên</th>
+                  <th>Huyện</th>
+                  <th>Thời gian</th>
+                  <th>Mức độ</th>
+                  <th>Diện tích (ha)</th>
+                  <th>Hành động</th>
+                </tr>
+              </thead>
+              <tbody>
+                <!-- rows injected by JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h3>THÊM ĐIỂM CHÁY MỚI</h3>
+          <!-- Copied form from index.html (ids kept intact) -->
+          <div>
+            <div class="form-group">
+              <label for="fireName"><i class="fas fa-fire-alt"></i> Tên điểm cháy:</label>
+              <input type="text" id="fireName" placeholder="Nhập tên điểm cháy" />
+            </div>
+
+            <div class="form-group">
+              <label for="fireDistrict"><i class="fas fa-map-marker-alt"></i> Huyện/Thành phố:</label>
+              <select id="fireDistrict">
+                <option value="">Chọn huyện</option>
+                <option value="Long Xuyên">Long Xuyên</option>
+                <option value="Châu Đốc">Châu Đốc</option>
+                <option value="An Phú">An Phú</option>
+                <option value="Tân Châu">Tân Châu</option>
+                <option value="Phú Tân">Phú Tân</option>
+                <option value="Châu Phú">Châu Phú</option>
+                <option value="Tịnh Biên">Tịnh Biên</option>
+                <option value="Tri Tôn">Tri Tôn</option>
+                <option value="Chợ Mới">Chợ Mới</option>
+                <option value="Thoại Sơn">Thoại Sơn</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="fireLat"><i class="fas fa-globe-asia"></i> Vĩ độ:</label>
+              <input type="number" id="fireLat" step="any" placeholder="Ví dụ: 10.386" />
+            </div>
+
+            <div class="form-group">
+              <label for="fireLng"><i class="fas fa-globe-asia"></i> Kinh độ:</label>
+              <input type="number" id="fireLng" step="any" placeholder="Ví dụ: 105.435" />
+            </div>
+
+            <div class="form-group">
+              <label for="discoveryTime"><i class="fas fa-clock"></i> Thời gian phát hiện:</label>
+              <input type="datetime-local" id="discoveryTime" />
+            </div>
+
+            <div class="form-group">
+              <label for="dangerLevel"><i class="fas fa-exclamation-triangle"></i> Mức độ nguy hiểm:</label>
+              <select id="dangerLevel">
+                <option value="low">🟢 Thấp</option>
+                <option value="medium">🟡 Trung bình</option>
+                <option value="high">🔴 Cao</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="affectedArea"><i class="fas fa-ruler-combined"></i> Diện tích ảnh hưởng (ha):</label>
+              <input type="number" id="affectedArea" placeholder="Nhập diện tích" />
+            </div>
+
+            <div class="form-group">
+              <label for="fireCause"><i class="fas fa-search"></i> Nguyên nhân:</label>
+              <textarea id="fireCause" placeholder="Mô tả nguyên nhân cháy..."></textarea>
+            </div>
+
+            <div class="form-group">
+              <label for="newsUrl"><i class="fas fa-newspaper"></i> URL báo chí (tùy chọn):</label>
+              <input type="url" id="newsUrl" placeholder="https://example.com/bai-bao" />
+              <div class="small" id="urlError" style="display:none;color:#e74c3c;margin-top:6px;">URL không hợp lệ</div>
+            </div>
+
+            <div style="display:flex;gap:10px;">
+              <button id="addFireBtn" class="btn-primary" style="flex:1;"><i class="fas fa-plus"></i> THÊM ĐIỂM CHÁY</button>
+              <button id="resetFormBtn" style="flex:0 0 auto;padding:8px 10px;border:1px solid #ddd;background:#fff;border-radius:4px;">Reset</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top:18px; font-size:0.85rem; color:#666;">Notes: This admin page posts to <code>api/fires.php</code> and expects JSON responses. Delete also calls DELETE on the same endpoint.</div>
+    </div>
+
+    <script>
+      // Helper: validate URL
+      function isValidUrl(str) {
+        try { new URL(str); return true; } catch (e) { return false; }
+      }
+
+      async function loadFires() {
+        const tbody = document.querySelector('#firesTable tbody');
+        tbody.innerHTML = '<tr><td colspan="7">Đang tải...</td></tr>';
+        try {
+          const resp = await fetch('api/fires.php');
+          if (!resp.ok) throw new Error('API lỗi');
+          const data = await resp.json();
+          renderTable(data);
+        } catch (err) {
+          tbody.innerHTML = '<tr><td colspan="7">Không thể tải dữ liệu.</td></tr>';
+          console.error(err);
+        }
+      }
+
+      function renderTable(data) {
+        const tbody = document.querySelector('#firesTable tbody');
+        if (!Array.isArray(data) || data.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="7">Không có vụ cháy nào.</td></tr>';
+          return;
+        }
+        tbody.innerHTML = '';
+        data.forEach(f => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td>${f.id || ''}</td>
+            <td>${f.name || ''}</td>
+            <td>${f.district || ''}</td>
+            <td>${f.discoveryTime ? new Date(f.discoveryTime).toLocaleString('vi-VN') : ''}</td>
+            <td>${f.dangerLevel || ''}</td>
+            <td>${f.affectedArea != null ? f.affectedArea : ''}</td>
+            <td>
+              <button data-id="${f.id}" class="btn-edit" style="margin-right:6px;">Sửa</button>
+              <button data-id="${f.id}" class="btn-delete btn-danger">Xóa</button>
+            </td>
+          `;
+          tbody.appendChild(tr);
+        });
+        // attach edit handlers
+        document.querySelectorAll('.btn-edit').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            const id = btn.dataset.id;
+            // fetch single record from API by loading all and finding id (API currently returns array)
+            try {
+              const resp = await fetch('api/fires.php');
+              if (!resp.ok) throw new Error('API lỗi');
+              const list = await resp.json();
+              const item = list.find(x => String(x.id) === String(id));
+              if (!item) { alert('Không tìm thấy mục để sửa'); return; }
+              // populate form
+              window.editingId = id;
+              document.getElementById('fireName').value = item.name || '';
+              document.getElementById('fireDistrict').value = item.district || '';
+              if (item.coordinates && item.coordinates.length >= 2) {
+                document.getElementById('fireLat').value = item.coordinates[0];
+                document.getElementById('fireLng').value = item.coordinates[1];
+              }
+              if (item.discoveryTime) {
+                // convert to yyyy-mm-ddThh:mm for input
+                const d = new Date(item.discoveryTime);
+                const iso = new Date(d.getTime() - d.getTimezoneOffset()*60000).toISOString();
+                document.getElementById('discoveryTime').value = iso.slice(0,16);
+              }
+              document.getElementById('dangerLevel').value = item.dangerLevel || 'low';
+              document.getElementById('affectedArea').value = item.affectedArea != null ? item.affectedArea : '';
+              document.getElementById('fireCause').value = item.cause || '';
+              document.getElementById('newsUrl').value = item.newsUrl || '';
+              // change add button to save
+              document.getElementById('addFireBtn').textContent = 'LƯU THAY ĐỔI';
+            } catch (err) {
+              console.error(err); alert('Không thể tải mục để sửa');
+            }
+          });
+        });
+        // attach delete handlers
+        document.querySelectorAll('.btn-delete').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            const id = btn.dataset.id;
+            if (!confirm('Bạn có chắc muốn xóa vụ cháy #' + id + '?')) return;
+            try {
+              const resp = await fetch('api/fires.php?id=' + encodeURIComponent(id), { method: 'DELETE' });
+              const res = await resp.json();
+              if (!resp.ok) throw new Error(res.message || 'Lỗi xóa');
+              await loadFires();
+              alert('Đã xóa.');
+            } catch (err) {
+              console.error(err); alert('Xóa thất bại.');
+            }
+          });
+        });
+      }
+
+      // Add new fire handler (reuses ids from index.html)
+      document.addEventListener('DOMContentLoaded', () => {
+        loadFires();
+
+        document.getElementById('addFireBtn').addEventListener('click', async (e) => {
+          e.preventDefault();
+          const name = document.getElementById('fireName').value.trim();
+          const district = document.getElementById('fireDistrict').value;
+          const lat = parseFloat(document.getElementById('fireLat').value);
+          const lng = parseFloat(document.getElementById('fireLng').value);
+          const discoveryTime = document.getElementById('discoveryTime').value;
+          const dangerLevel = document.getElementById('dangerLevel').value;
+          const affectedArea = parseFloat(document.getElementById('affectedArea').value) || 0;
+          const cause = document.getElementById('fireCause').value.trim();
+          const newsUrl = document.getElementById('newsUrl').value.trim();
+
+          if (!name || !district || !isFinite(lat) || !isFinite(lng) || !discoveryTime) {
+            alert('Vui lòng điền đầy đủ thông tin bắt buộc (tên, huyện, tọa độ, thời gian).');
+            return;
+          }
+
+          if (newsUrl && !isValidUrl(newsUrl)) {
+            document.getElementById('urlError').style.display = 'block';
+            return;
+          }
+          document.getElementById('urlError').style.display = 'none';
+
+          const payload = {
+            name,
+            coordinates: [lat, lng],
+            discoveryTime: discoveryTime + ':00',
+            dangerLevel,
+            affectedArea,
+            district,
+            cause,
+            newsUrl
+          };
+
+          try {
+            // If we're editing, perform PUT to update
+            if (window.editingId) {
+              const id = window.editingId;
+              const resp = await fetch('api/fires.php?id=' + encodeURIComponent(id), {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+              });
+              const res = await resp.json();
+              if (!resp.ok) throw new Error(res.message || 'Lỗi cập nhật');
+              alert('Đã cập nhật vụ cháy.');
+              // exit edit mode
+              window.editingId = null;
+              document.getElementById('addFireBtn').textContent = 'THÊM ĐIỂM CHÁY';
+            } else {
+              const resp = await fetch('api/fires.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+              });
+              const res = await resp.json();
+              if (!resp.ok) throw new Error(res.message || 'Lỗi');
+              alert('Đã thêm vụ cháy.');
+            }
+            // reset form
+            document.getElementById('fireName').value='';
+            document.getElementById('fireLat').value='';
+            document.getElementById('fireLng').value='';
+            document.getElementById('discoveryTime').value='';
+            document.getElementById('affectedArea').value='';
+            document.getElementById('fireCause').value='';
+            document.getElementById('newsUrl').value='';
+            document.getElementById('urlError').style.display='none';
+            loadFires();
+          } catch (err) {
+            console.error(err);
+            alert('Không thể thêm/cập nhật, kiểm tra console.');
+          }
+        });
+
+        document.getElementById('resetFormBtn').addEventListener('click', (e) => {
+          e.preventDefault();
+          document.getElementById('fireName').value='';
+          document.getElementById('fireLat').value='';
+          document.getElementById('fireLng').value='';
+          document.getElementById('discoveryTime').value='';
+          document.getElementById('affectedArea').value='';
+          document.getElementById('fireCause').value='';
+          document.getElementById('newsUrl').value='';
+          document.getElementById('urlError').style.display='none';
+          // cancel edit mode if any
+          if (window.editingId) {
+            window.editingId = null;
+            document.getElementById('addFireBtn').textContent = 'THÊM ĐIỂM CHÁY';
+          }
+        });
+      });
+    </script>
+  </body>
+</html>

@@ -179,6 +179,135 @@ if ($method === 'POST') {
     exit;
 }
 
+// Support PUT (update) and DELETE (remove)
+if ($method === 'PUT') {
+    // Expect id in query string
+    $id = isset($_GET['id']) ? intval($_GET['id']) : null;
+    $input = json_decode(file_get_contents('php://input'), true);
+    if (!$id || !$input) {
+        http_response_code(400);
+        echo json_encode(['error' => 'Missing id or payload']);
+        exit;
+    }
+
+    // normalize fields similar to POST
+    $lat = isset($input['coordinates'][0]) ? floatval($input['coordinates'][0]) : null;
+    $lng = isset($input['coordinates'][1]) ? floatval($input['coordinates'][1]) : null;
+    $discoveryTimeRaw = isset($input['discoveryTime']) ? $input['discoveryTime'] : '';
+    $discoveryTime = null;
+    if ($discoveryTimeRaw) {
+        $dt = DateTime::createFromFormat('Y-m-d\\TH:i:s', $discoveryTimeRaw) ?: new DateTime($discoveryTimeRaw);
+        if ($dt) $discoveryTime = $dt->format('Y-m-d H:i:s');
+    }
+    $dangerLevel = isset($input['dangerLevel']) ? $input['dangerLevel'] : null;
+    $affectedArea = isset($input['affectedArea']) ? floatval($input['affectedArea']) : 0;
+    $province = isset($input['province']) ? $input['province'] : '';
+    $status = isset($input['status']) ? $input['status'] : 'active';
+    $district = isset($input['district']) ? $input['district'] : '';
+    $cause = isset($input['cause']) ? $input['cause'] : '';
+    $newsUrl = isset($input['newsUrl']) ? $input['newsUrl'] : '';
+
+    if ($pdo) {
+        try {
+            $ma_huyen = null;
+            if ($district) {
+                $q = $pdo->prepare('SELECT ma_huyen FROM quanhuyen WHERE ten = ? LIMIT 1');
+                $q->execute([$district]);
+                $row = $q->fetch(PDO::FETCH_ASSOC);
+                if ($row && isset($row['ma_huyen'])) $ma_huyen = (int)$row['ma_huyen'];
+            }
+
+            $sql = 'UPDATE vuchay SET ten = ?, vi_do = ?, kinh_do = ?, thoi_gian_phat_hien = ?, dien_tich_anh_huong_ha = ?, nguyen_nhan = ?, link_bao_chi = ?, ma_huyen = ?, ma_muc_do = ?, ma_trang_thai = ? WHERE ma_vu_chay = ?';
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute([
+                $input['name'], $lat, $lng, $discoveryTime, $affectedArea, $cause, $newsUrl, $ma_huyen, $dangerLevel, $status, $id
+            ]);
+
+            echo json_encode(['success' => true]);
+            exit;
+        } catch (Exception $e) {
+            error_log('DB UPDATE failed: ' . $e->getMessage());
+            // fallback to file
+        }
+    }
+
+    // file fallback: update item with matching id
+    $data = load_file_data($dataFile);
+    $found = false;
+    foreach ($data as &$item) {
+        if (isset($item['id']) && intval($item['id']) === $id) {
+            $item['name'] = $input['name'];
+            if ($lat !== null && $lng !== null) $item['coordinates'] = [$lat, $lng];
+            if ($discoveryTime) $item['discoveryTime'] = date('Y-m-d\\TH:i:s', strtotime($discoveryTime));
+            $item['dangerLevel'] = $dangerLevel;
+            $item['affectedArea'] = $affectedArea;
+            $item['province'] = $province;
+            $item['status'] = $status;
+            $item['district'] = $district;
+            $item['cause'] = $cause;
+            $item['newsUrl'] = $newsUrl;
+            $found = true;
+            break;
+        }
+    }
+    if ($found) {
+        $fp = fopen($dataFile, 'c+');
+        if ($fp === false) {
+            http_response_code(500);
+            echo json_encode(['error' => 'Could not open data file']);
+            exit;
+        }
+        if (!flock($fp, LOCK_EX)) { fclose($fp); http_response_code(500); echo json_encode(['error' => 'Could not lock data file']); exit; }
+        ftruncate($fp, 0); rewind($fp); fwrite($fp, json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)); fflush($fp); flock($fp, LOCK_UN); fclose($fp);
+        echo json_encode(['success' => true]);
+        exit;
+    } else {
+        http_response_code(404);
+        echo json_encode(['error' => 'Not found']);
+        exit;
+    }
+}
+
+if ($method === 'DELETE') {
+    $id = isset($_GET['id']) ? intval($_GET['id']) : null;
+    if (!$id) {
+        http_response_code(400);
+        echo json_encode(['error' => 'Missing id']);
+        exit;
+    }
+
+    if ($pdo) {
+        try {
+            $stmt = $pdo->prepare('DELETE FROM vuchay WHERE ma_vu_chay = ?');
+            $stmt->execute([$id]);
+            echo json_encode(['success' => true]);
+            exit;
+        } catch (Exception $e) {
+            error_log('DB DELETE failed: ' . $e->getMessage());
+            // fallback to file
+        }
+    }
+
+    // file fallback
+    $data = load_file_data($dataFile);
+    $new = [];
+    $removed = false;
+    foreach ($data as $item) {
+        if (isset($item['id']) && intval($item['id']) === $id) {
+            $removed = true; continue;
+        }
+        $new[] = $item;
+    }
+    if (!$removed) { http_response_code(404); echo json_encode(['error' => 'Not found']); exit; }
+
+    $fp = fopen($dataFile, 'c+');
+    if ($fp === false) { http_response_code(500); echo json_encode(['error' => 'Could not open data file']); exit; }
+    if (!flock($fp, LOCK_EX)) { fclose($fp); http_response_code(500); echo json_encode(['error' => 'Could not lock data file']); exit; }
+    ftruncate($fp, 0); rewind($fp); fwrite($fp, json_encode($new, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)); fflush($fp); flock($fp, LOCK_UN); fclose($fp);
+    echo json_encode(['success' => true]);
+    exit;
+}
+
 http_response_code(405);
 echo json_encode(['error' => 'Method not allowed']);
 exit;
